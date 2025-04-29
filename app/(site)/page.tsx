@@ -12,6 +12,8 @@ import Pricing from "@/components/Pricing";
 import Contact from "@/components/Contact";
 import Blog from "@/components/Blog";
 import Testimonial from "@/components/Testimonial";
+import InfiniteContentGrid from "@/components/InfiniteContentGrid/InfiniteContentGrid";
+import NuestroEquipo from "@/components/ourTeam/ourTeam";
 
 export const metadata: Metadata = {
   title: "Fosfenos Media",
@@ -25,15 +27,10 @@ export default function Home() {
     <main>
       <Hero />
       <Brands />
-      <Feature />
-      <About />
-      <FeaturesTab />
+      <InfiniteContentGrid />
+      <NuestroEquipo />
       <FunFact />
-      <Integration />
       <CTA />
-      <FAQ />
-      <Testimonial />
-      <Pricing />
       <Contact />
       <Blog />
     </main>
