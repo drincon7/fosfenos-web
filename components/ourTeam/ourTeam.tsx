@@ -7,7 +7,8 @@ import equipoData from "./equipoData";
 
 const NuestroEquipo = () => {
   return (
-    <section className="relative py-20 bg-white dark:bg-blacksection">
+    <section className="relative py-20 bg-white dark:bg-blacksection"
+    id="equipo">
       <div className="absolute -top-16 -z-1 mx-auto h-[350px] w-[90%]">
         <Image
           fill

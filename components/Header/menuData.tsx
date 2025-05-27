@@ -11,13 +11,13 @@ const menuData: Menu[] = [
     id: 2,
     title: "Fosfenos",
     newTab: false,
-    path: "/fosfenos",
+    path: "/",
   },
   {
     id: 3,
     title: "Equipo",
     newTab: false,
-    path: "/equipo",
+    path: "#equipo",
   },
   {
     id: 4,
@@ -28,19 +28,19 @@ const menuData: Menu[] = [
         id: 41,
         title: "El libro de LIla",
         newTab: false,
-        path: "/contenido-infantil/El libro de Lila",
+        path: "/contenido-infantil/el-libro-de-lila", 
       },
       {
         id: 42,
         title: "Guillermina y Candelario",
         newTab: false,
-        path: "/contenido-infantil/cuentos",
+        path: "/contenido-infantil/guillermina-y-candelario",
       },
       {
         id: 43,
         title: "El Pescado de estrellas",
         newTab: false,
-        path: "/contenido-infantil/juegos",
+        path: "/contenido-infantil/el-pescador-de-estrellas",
       },
       {
         id: 44,
@@ -85,7 +85,7 @@ const menuData: Menu[] = [
     id: 6,
     title: "Servicios",
     newTab: false,
-    path: "/servicios",
+    path: "#servicios",
   },
 ];
 
