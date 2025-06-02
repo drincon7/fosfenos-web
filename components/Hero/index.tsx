@@ -1,8 +1,7 @@
 "use client";
 import Image from "next/image";
-import { useState, useRef, useEffect } from "react";
-// Importamos los iconos necesarios de Lucide React
-import { Palette, Lightbulb, Wrench, MessageCircle } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Palette, Lightbulb, Wrench, MessageCircle, X, Play, Pause, Maximize2, Minimize2 } from "lucide-react";
 
 // Definimos una interfaz para nuestros features para hacerlo más mantenible
 interface Feature {
@@ -13,10 +12,13 @@ interface Feature {
 
 const Hero = () => {
   const [isVideoExpanded, setIsVideoExpanded] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [hasBeenExpandedOnce, setHasBeenExpandedOnce] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  
   const videoRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
 
   // Definimos nuestras features con sus correspondientes iconos
   const features: Feature[] = [
@@ -42,9 +44,46 @@ const Hero = () => {
     }
   ];
 
-  // Función mejorada para manejar clics, posición del mouse y scroll
+  // Función para expandir el video (optimizada con useCallback)
+  const expandVideo = useCallback(() => {
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    setIsVideoExpanded(true);
+    setHasBeenExpandedOnce(true);
+    
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 1000);
+  }, [isAnimating]);
+
+  // Función para contraer el video (optimizada con useCallback)
+  const collapseVideo = useCallback(() => {
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    setIsVideoExpanded(false);
+    
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 1000);
+  }, [isAnimating]);
+
+  // Función para manejar play/pause
+  const togglePlayPause = useCallback(() => {
+    if (videoElementRef.current) {
+      if (isPlaying) {
+        videoElementRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoElementRef.current.play().catch(console.error);
+        setIsPlaying(true);
+      }
+    }
+  }, [isPlaying]);
+
+  // Manejo de eventos mejorado
   useEffect(() => {
-    // Manejador de clics fuera del video
     const handleClickOutside = (event: MouseEvent) => {
       if (
         isVideoExpanded &&
@@ -55,49 +94,33 @@ const Hero = () => {
       }
     };
 
-    // Función para cerrar el video al hacer scroll
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isVideoExpanded) {
+        collapseVideo();
+      }
+    };
+
     const handleScroll = () => {
       if (isVideoExpanded) {
         collapseVideo();
       }
     };
 
-    // Función mejorada para verificar si el mouse está fuera del contenedor del video
-    const handleMousePosition = (event: MouseEvent) => {
-      if (!isVideoExpanded || isAnimating) return; // No verificar durante animaciones
-      
-      if (videoRef.current) {
-        const rect = videoRef.current.getBoundingClientRect();
-        
-        // Aumentamos el margen para mejor detección
-        const margin = 20;
-        const isOutside = 
-          event.clientX < rect.left - margin || 
-          event.clientX > rect.right + margin || 
-          event.clientY < rect.top - margin || 
-          event.clientY > rect.bottom + margin;
-        
-        if (isOutside) {
-          collapseVideo();
-        }
-      }
-    };
-
-    // Optimización: Solo añadir listeners necesarios
+    // Solo agregar listeners cuando el video está expandido
     if (isVideoExpanded) {
       document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
       window.addEventListener("scroll", handleScroll);
-      document.addEventListener("mousemove", handleMousePosition);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
       window.removeEventListener("scroll", handleScroll);
-      document.removeEventListener("mousemove", handleMousePosition);
     };
-  }, [isVideoExpanded, isAnimating]);
+  }, [isVideoExpanded, collapseVideo]);
 
-  // Asegurarse de que el video se reproduzca cuando cambie de estado
+  // Manejo del video para asegurar reproducción
   useEffect(() => {
     if (videoElementRef.current) {
       videoElementRef.current.play().catch((error) => {
@@ -105,32 +128,6 @@ const Hero = () => {
       });
     }
   }, [isVideoExpanded]);
-
-  // Función mejorada para expandir el video con animación suavizada
-  const expandVideo = () => {
-    if (isAnimating) return; // Evitar múltiples expansiones durante la animación
-    
-    setIsAnimating(true);
-    setIsVideoExpanded(true);
-    
-    // Resetear el estado de animación después de completarse
-    setTimeout(() => {
-      setIsAnimating(false);
-    }, 1000); // Tiempo ligeramente superior a la duración de la transición
-  };
-
-  // Función mejorada para contraer el video con animación suavizada
-  const collapseVideo = () => {
-    if (isAnimating) return; // Evitar múltiples contracciones durante la animación
-    
-    setIsAnimating(true);
-    setIsVideoExpanded(false);
-    
-    // Resetear el estado de animación después de completarse
-    setTimeout(() => {
-      setIsAnimating(false);
-    }, 1000); // Tiempo ligeramente superior a la duración de la transición
-  };
 
   // Componente de marco decorativo que se desvanece
   const VideoFrame = ({ isVisible }: { isVisible: boolean }) => (
@@ -174,6 +171,54 @@ const Hero = () => {
     </div>
   );
 
+  // Componente de controles de video
+  const VideoControls = () => (
+    <div className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-sm rounded-full px-6 py-3 transition-all duration-300 ${
+      isVideoExpanded ? 'opacity-100 visible' : 'opacity-0 invisible'
+    }`}>
+      <button
+        onClick={togglePlayPause}
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+        aria-label={isPlaying ? "Pausar video" : "Reproducir video"}
+      >
+        {isPlaying ? (
+          <Pause size={20} className="text-white" />
+        ) : (
+          <Play size={20} className="text-white ml-1" />
+        )}
+      </button>
+      
+      <button
+        onClick={collapseVideo}
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+        aria-label="Minimizar video"
+      >
+        <Minimize2 size={20} className="text-white" />
+      </button>
+      
+      <button
+        onClick={collapseVideo}
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-red-500/70 hover:bg-red-500/90 transition-colors"
+        aria-label="Cerrar video"
+      >
+        <X size={20} className="text-white" />
+      </button>
+    </div>
+  );
+
+  // Función para manejar la interacción inicial (hover o click)
+  const handleVideoInteraction = (eventType: 'hover' | 'click') => {
+    if (isVideoExpanded) return;
+    
+    // Si nunca se ha expandido, responder al hover
+    // Si ya se expandió una vez, solo responder al click
+    if (!hasBeenExpandedOnce && eventType === 'hover') {
+      expandVideo();
+    } else if (hasBeenExpandedOnce && eventType === 'click') {
+      expandVideo();
+    }
+  };
+
   return (
     <>
       <section className="relative min-h-screen overflow-hidden">
@@ -201,11 +246,18 @@ const Hero = () => {
                 position: "relative"
               }}
               ref={videoContainerRef}
-              onMouseEnter={expandVideo}
-              // onMouseLeave se maneja con la detección avanzada
+              onMouseEnter={() => handleVideoInteraction('hover')}
+              onClick={() => handleVideoInteraction('click')}
             >
               {/* Marco decorativo que se desvanece con una transición más suave */}
               <VideoFrame isVisible={!isVideoExpanded} />
+              
+              {/* Indicador visual para clicks posteriores */}
+              {hasBeenExpandedOnce && !isVideoExpanded && (
+                <div className="absolute top-4 right-4 z-30 bg-black/50 backdrop-blur-sm rounded-full p-2">
+                  <Maximize2 size={16} className="text-white" />
+                </div>
+              )}
               
               {/* Contenedor del video con transición mejorada */}
               <div
@@ -222,7 +274,6 @@ const Hero = () => {
                   justifyContent: "center",
                   backgroundColor: isVideoExpanded ? "rgba(0,0,0,0.8)" : "transparent",
                   padding: isVideoExpanded ? "1rem" : "0",
-                  // Transición suavizada con curva personalizada
                   transition: "all 0.85s cubic-bezier(0.19, 1, 0.22, 1)",
                 }}
               >
@@ -238,16 +289,19 @@ const Hero = () => {
                   muted
                   loop
                   playsInline
-                  controls={isVideoExpanded}
                   style={{ 
                     zIndex: isVideoExpanded ? 100 : "auto",
-                    // Transición adicional para el video interno
                     transition: "all 0.85s cubic-bezier(0.19, 1, 0.22, 1)"
                   }}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
                 >
                   <source src="/videos/hero.mp4" type="video/mp4" />
                   Tu navegador no soporta videos HTML5.
                 </video>
+
+                {/* Controles de video */}
+                <VideoControls />
               </div>
             </div>
           </div>

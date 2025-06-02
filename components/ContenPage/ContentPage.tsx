@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
-import { useState, useRef, useEffect } from "react";
-import { Play, Download, Globe, Facebook, Instagram, ExternalLink } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Play, Download, Globe, Facebook, Instagram, ExternalLink, X, Pause, Maximize2, Minimize2 } from "lucide-react";
 import { ContentData, AWARD_COLORS } from "@/types/content";
 
 interface ContentPageProps {
@@ -11,10 +11,51 @@ interface ContentPageProps {
 const ContentPage = ({ data }: ContentPageProps) => {
   const [isVideoExpanded, setIsVideoExpanded] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [hasBeenExpandedOnce, setHasBeenExpandedOnce] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  
   const videoRef = useRef<HTMLDivElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
 
-  // Manejo del video expandido (similar al Hero)
+  // Función para expandir el video (optimizada con useCallback)
+  const expandVideo = useCallback(() => {
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    setIsVideoExpanded(true);
+    setHasBeenExpandedOnce(true);
+    
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 1000);
+  }, [isAnimating]);
+
+  // Función para contraer el video (optimizada con useCallback)
+  const collapseVideo = useCallback(() => {
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    setIsVideoExpanded(false);
+    
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 1000);
+  }, [isAnimating]);
+
+  // Función para manejar play/pause
+  const togglePlayPause = useCallback(() => {
+    if (videoElementRef.current) {
+      if (isPlaying) {
+        videoElementRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoElementRef.current.play().catch(console.error);
+        setIsPlaying(true);
+      }
+    }
+  }, [isPlaying]);
+
+  // Manejo de eventos mejorado
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -26,44 +67,88 @@ const ContentPage = ({ data }: ContentPageProps) => {
       }
     };
 
-    const handleScroll = () => {
-      if (isVideoExpanded) {
-        collapseVideo();
-      }
-    };
-
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isVideoExpanded) {
         collapseVideo();
       }
     };
 
+    const handleScroll = () => {
+      if (isVideoExpanded) {
+        collapseVideo();
+      }
+    };
+
+    // Solo agregar listeners cuando el video está expandido
     if (isVideoExpanded) {
       document.addEventListener("mousedown", handleClickOutside);
-      window.addEventListener("scroll", handleScroll);
       document.addEventListener("keydown", handleEscape);
+      window.addEventListener("scroll", handleScroll);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      window.removeEventListener("scroll", handleScroll);
       document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("scroll", handleScroll);
     };
+  }, [isVideoExpanded, collapseVideo]);
+
+  // Asegurar reproducción del video
+  useEffect(() => {
+    if (videoElementRef.current) {
+      videoElementRef.current.play().catch((error) => {
+        console.error("Error reproduciendo el video:", error);
+      });
+    }
   }, [isVideoExpanded]);
 
-  const expandVideo = () => {
-    if (isAnimating) return;
-    setIsAnimating(true);
-    setIsVideoExpanded(true);
-    setTimeout(() => setIsAnimating(false), 1000);
+  // Función para manejar la interacción inicial (hover o click)
+  const handleVideoInteraction = (eventType: 'hover' | 'click') => {
+    if (isVideoExpanded) return;
+    
+    // Si nunca se ha expandido, responder al hover
+    // Si ya se expandió una vez, solo responder al click
+    if (!hasBeenExpandedOnce && eventType === 'hover') {
+      expandVideo();
+    } else if (hasBeenExpandedOnce && eventType === 'click') {
+      expandVideo();
+    }
   };
 
-  const collapseVideo = () => {
-    if (isAnimating) return;
-    setIsAnimating(true);
-    setIsVideoExpanded(false);
-    setTimeout(() => setIsAnimating(false), 1000);
-  };
+  // Componente de controles de video
+  const VideoControls = () => (
+    <div className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/50 backdrop-blur-sm rounded-full px-6 py-3 transition-all duration-300 ${
+      isVideoExpanded ? 'opacity-100 visible' : 'opacity-0 invisible'
+    }`}>
+      <button
+        onClick={togglePlayPause}
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+        aria-label={isPlaying ? "Pausar video" : "Reproducir video"}
+      >
+        {isPlaying ? (
+          <Pause size={20} className="text-white" />
+        ) : (
+          <Play size={20} className="text-white ml-1" />
+        )}
+      </button>
+      
+      <button
+        onClick={collapseVideo}
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+        aria-label="Minimizar video"
+      >
+        <Minimize2 size={20} className="text-white" />
+      </button>
+      
+      <button
+        onClick={collapseVideo}
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-red-500/70 hover:bg-red-500/90 transition-colors"
+        aria-label="Cerrar video"
+      >
+        <X size={20} className="text-white" />
+      </button>
+    </div>
+  );
 
   // Componente de premio
   const AwardItem = ({ award }: { award: typeof data.awards[0] }) => (
@@ -106,8 +191,16 @@ const ContentPage = ({ data }: ContentPageProps) => {
               <div
                 className="relative w-full"
                 style={{ aspectRatio: "16/9" }}
-                onMouseEnter={expandVideo}
+                onMouseEnter={() => handleVideoInteraction('hover')}
+                onClick={() => handleVideoInteraction('click')}
               >
+                {/* Indicador visual para clicks posteriores */}
+                {hasBeenExpandedOnce && !isVideoExpanded && (
+                  <div className="absolute top-4 right-4 z-30 bg-black/50 backdrop-blur-sm rounded-full p-2">
+                    <Maximize2 size={16} className="text-white" />
+                  </div>
+                )}
+                
                 <div
                   ref={videoRef}
                   className={`relative overflow-hidden rounded-lg shadow-2xl ${
@@ -136,13 +229,18 @@ const ContentPage = ({ data }: ContentPageProps) => {
                     muted
                     loop
                     playsInline
-                    controls={isVideoExpanded}
+                    style={{ 
+                      zIndex: isVideoExpanded ? 100 : "auto",
+                      transition: "all 0.85s cubic-bezier(0.19, 1, 0.22, 1)"
+                    }}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
                   >
                     <source src={data.videoUrl} type="video/mp4" />
                     Tu navegador no soporta videos HTML5.
                   </video>
 
-                  {/* Play Overlay */}
+                  {/* Play Overlay - Solo cuando no está expandido */}
                   {!isVideoExpanded && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity hover:bg-black/20">
                       <div className="rounded-full bg-white/20 p-4 backdrop-blur-sm transition-transform hover:scale-110">
@@ -150,6 +248,9 @@ const ContentPage = ({ data }: ContentPageProps) => {
                       </div>
                     </div>
                   )}
+
+                  {/* Controles de video */}
+                  <VideoControls />
                 </div>
               </div>
             </div>
@@ -234,7 +335,7 @@ const ContentPage = ({ data }: ContentPageProps) => {
                   </p>
                 </div>
                 
-                {data.technicalInfo.empresaCoproductora && (
+                {data.technicalInfo.empresaCoproductora && data.technicalInfo.empresaCoproductora.nombre && (
                   <div className="rounded-lg bg-purple-100 p-4">
                     <h4 className="mb-2 font-semibold text-purple-800">Empresa Coproductora:</h4>
                     <p className="text-purple-600">

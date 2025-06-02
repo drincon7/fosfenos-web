@@ -38,7 +38,7 @@ const menuData: Menu[] = [
       },
       {
         id: 43,
-        title: "El Pescado de estrellas",
+        title: "El Pescador de estrellas",
         newTab: false,
         path: "/contenido-infantil/el-pescador-de-estrellas",
       },

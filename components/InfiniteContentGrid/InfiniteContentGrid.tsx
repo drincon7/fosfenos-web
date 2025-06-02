@@ -85,8 +85,14 @@ interface ContentCardProps {
 const ContentCard: React.FC<ContentCardProps> = ({ content, onClick }) => {
   return (
     <div 
-      className="w-64 h-64 overflow-hidden rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer hover:shadow-xl relative"
+      className="w-64 h-64 overflow-hidden rounded-lg shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer hover:shadow-xl relative select-none"
       onClick={() => onClick(content)}
+      style={{ 
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none'
+      } as React.CSSProperties}
     >
       <div className="w-full h-full relative">
         <img 
@@ -94,10 +100,18 @@ const ContentCard: React.FC<ContentCardProps> = ({ content, onClick }) => {
           alt={content.title} 
           className="w-full h-full object-cover"
           loading="lazy"
+          draggable={false}
+          style={{
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
+          } as React.CSSProperties}
+          onDragStart={(e) => e.preventDefault()}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-          <h3 className="text-white text-lg font-bold">{content.title}</h3>
-          <p className="text-white text-sm opacity-90">{content.shortDescription}</p>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 select-none">
+          <h3 className="text-white text-lg font-bold select-none">{content.title}</h3>
+          <p className="text-white text-sm opacity-90 select-none">{content.shortDescription}</p>
         </div>
       </div>
     </div>
@@ -110,9 +124,20 @@ const InfiniteContentGrid: React.FC = () => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [startPosition, setStartPosition] = useState({ x: 0, y: 0 });
+  
+  // Estados para distinguir entre click y drag
+  const [dragStartTime, setDragStartTime] = useState<number>(0);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [hasMoved, setHasMoved] = useState(false);
+  const [clickedContent, setClickedContent] = useState<ContentItem | null>(null);
+  
   const gridRef = useRef<HTMLDivElement>(null);
   
-  // Datos de ejemplo para el contenido infantil (ahora ya con imágenes reales)
+  // Configuración para determinar qué constituye un click vs drag
+  const CLICK_THRESHOLD_TIME = 300; // milisegundos
+  const CLICK_THRESHOLD_DISTANCE = 5; // píxeles
+  
+  // Datos de ejemplo para el contenido infantil
   const contentItems: ContentItem[] = [
     {
       id: 1,
@@ -167,7 +192,7 @@ const InfiniteContentGrid: React.FC = () => {
       title: "Música para Crecer",
       shortDescription: "Aprendizaje musical",
       description: "Programa que introduce conceptos musicales básicos de manera divertida y participativa.",
-      image: "/images/content/assassins.webp", // Cambiado el placeholder por una imagen real
+      image: "/images/content/assassins.webp",
       details: ["Edad recomendada: 2-6 años", "Duración: 12 minutos por episodio", "Temporadas disponibles: 3"]
     },
     {
@@ -175,7 +200,7 @@ const InfiniteContentGrid: React.FC = () => {
       title: "Viaje al Espacio",
       shortDescription: "Astronomía para niños",
       description: "Una aventura espacial que enseña sobre planetas, estrellas y fenómenos espaciales.",
-      image: "/images/content/dune.webp", // Cambiado el placeholder por una imagen real
+      image: "/images/content/dune.webp",
       details: ["Edad recomendada: 6-10 años", "Duración: 22 minutos por episodio", "Temporadas disponibles: 1"]
     },
     {
@@ -183,18 +208,16 @@ const InfiniteContentGrid: React.FC = () => {
       title: "Historias del Mundo",
       shortDescription: "Cuentos tradicionales",
       description: "Colección de cuentos y leyendas de diferentes culturas del mundo, narradas de forma amena para los más pequeños.",
-      image: "/images/content/sonic.jpg", // Cambiado el placeholder por una imagen real
+      image: "/images/content/sonic.jpg",
       details: ["Edad recomendada: 4-9 años", "Duración: 15 minutos por episodio", "Temporadas disponibles: 5"]
     },
   ];
 
   // Función para generar una matriz de 5x5 con contenido repetido si es necesario
-  // Modificada para crear un patrón más atractivo visualmente
   const generateGrid = (): GridItem[] => {
     const grid: GridItem[] = [];
-    const gridSize = 5; // 5x5 grid
+    const gridSize = 5;
     
-    // Generamos una secuencia específica para tener un patrón más atractivo
     const sequence = [
       [0, 1, 2, 3, 4],
       [5, 6, 7, 8, 0],
@@ -205,7 +228,6 @@ const InfiniteContentGrid: React.FC = () => {
     
     for (let row = 0; row < gridSize; row++) {
       for (let col = 0; col < gridSize; col++) {
-        // Usamos la secuencia predefinida para crear un patrón más interesante
         const contentIndex = sequence[row][col] % contentItems.length;
         
         grid.push({
@@ -218,22 +240,40 @@ const InfiniteContentGrid: React.FC = () => {
     return grid;
   };
 
-  // Animación automática para el desplazamiento lento - Suavizado
+  // Animación automática para el desplazamiento lento
   useEffect(() => {
     if (isDragging) return;
     
     const autoScrollInterval = setInterval(() => {
       setPosition(prev => ({
-        x: prev.x - 0.3, // Movimiento más lento en X
-        y: prev.y - 0.2  // Movimiento más lento en Y
+        x: prev.x - 0.3,
+        y: prev.y - 0.2
       }));
-    }, 30); // Intervalo más corto para animación más fluida
+    }, 30);
     
     return () => clearInterval(autoScrollInterval);
   }, [isDragging]);
 
-  // Manejadores de eventos para arrastrar la cuadrícula - Con inercia mejorada
+  // Función para calcular la distancia entre dos puntos
+  const calculateDistance = (x1: number, y1: number, x2: number, y2: number): number => {
+    return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  };
+
+  // Función para determinar si fue un click válido
+  const isValidClick = (endTime: number, endX: number, endY: number): boolean => {
+    const timeElapsed = endTime - dragStartTime;
+    const distanceMoved = calculateDistance(dragStartPos.x, dragStartPos.y, endX, endY);
+    
+    return timeElapsed < CLICK_THRESHOLD_TIME && distanceMoved < CLICK_THRESHOLD_DISTANCE && !hasMoved;
+  };
+
+  // Manejadores de eventos mejorados
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault(); // Prevenir selección de texto
+    const currentTime = Date.now();
+    setDragStartTime(currentTime);
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    setHasMoved(false);
     setIsDragging(true);
     setStartPosition({
       x: e.clientX - position.x,
@@ -242,6 +282,11 @@ const InfiniteContentGrid: React.FC = () => {
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault(); // Prevenir selección de texto
+    const currentTime = Date.now();
+    setDragStartTime(currentTime);
+    setDragStartPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+    setHasMoved(false);
     setIsDragging(true);
     setStartPosition({
       x: e.touches[0].clientX - position.x,
@@ -252,37 +297,78 @@ const InfiniteContentGrid: React.FC = () => {
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDragging) return;
     
-    setPosition({
-      x: e.clientX - startPosition.x,
-      y: e.clientY - startPosition.y
-    });
+    const newX = e.clientX - startPosition.x;
+    const newY = e.clientY - startPosition.y;
+    
+    // Marcar que hubo movimiento si se movió más del umbral
+    const distanceMoved = calculateDistance(dragStartPos.x, dragStartPos.y, e.clientX, e.clientY);
+    if (distanceMoved > CLICK_THRESHOLD_DISTANCE) {
+      setHasMoved(true);
+    }
+    
+    setPosition({ x: newX, y: newY });
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging) return;
-    e.preventDefault(); // Prevenir scroll en móviles
+    e.preventDefault();
     
-    setPosition({
-      x: e.touches[0].clientX - startPosition.x,
-      y: e.touches[0].clientY - startPosition.y
-    });
+    const newX = e.touches[0].clientX - startPosition.x;
+    const newY = e.touches[0].clientY - startPosition.y;
+    
+    // Marcar que hubo movimiento si se movió más del umbral
+    const distanceMoved = calculateDistance(dragStartPos.x, dragStartPos.y, e.touches[0].clientX, e.touches[0].clientY);
+    if (distanceMoved > CLICK_THRESHOLD_DISTANCE) {
+      setHasMoved(true);
+    }
+    
+    setPosition({ x: newX, y: newY });
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    
+    const endTime = Date.now();
+    const wasValidClick = isValidClick(endTime, e.clientX, e.clientY);
+    
     setIsDragging(false);
+    
+    // Solo abrir modal si fue un click válido y hay contenido seleccionado
+    if (wasValidClick && clickedContent) {
+      setActiveContent(clickedContent);
+    }
+    
+    // Limpiar el contenido clickeado
+    setClickedContent(null);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    
+    const endTime = Date.now();
+    // Para touch, usamos la última posición conocida
+    const wasValidClick = endTime - dragStartTime < CLICK_THRESHOLD_TIME && !hasMoved;
+    
+    setIsDragging(false);
+    
+    // Solo abrir modal si fue un click válido y hay contenido seleccionado
+    if (wasValidClick && clickedContent) {
+      setActiveContent(clickedContent);
+    }
+    
+    // Limpiar el contenido clickeado
+    setClickedContent(null);
   };
 
   const handleMouseLeave = () => {
     setIsDragging(false);
+    setClickedContent(null);
   };
 
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  // Función para abrir el modal con detalles del contenido
-  const handleOpenModal = (content: ContentItem) => {
-    setActiveContent(content);
+  // Función modificada para manejar clicks en tarjetas
+  const handleCardClick = (content: ContentItem) => {
+    // Solo almacenar el contenido, no abrir el modal inmediatamente
+    setClickedContent(content);
   };
 
   // Función para cerrar el modal
@@ -290,30 +376,38 @@ const InfiniteContentGrid: React.FC = () => {
     setActiveContent(null);
   };
 
-  // Implementación del efecto de "wraparound" infinito para la cuadrícula
+  // Implementación del efecto de "wraparound" infinito
   const wrapValue = (value: number, range: number): number => {
     const modulo = value % range;
     return modulo < 0 ? modulo + range : modulo;
   };
 
-  // Tamaño de tarjeta ajustado para mejor visualización
-  const cardWidth = 280; // Ancho de tarjeta en píxeles
-  const cardHeight = 280; // Alto de tarjeta en píxeles
-  const cardMargin = 20; // Margen entre tarjetas en píxeles
+  // Configuración de dimensiones
+  const cardWidth = 280;
+  const cardHeight = 280;
+  const cardMargin = 20;
   
-  const gridWidth = 5 * (cardWidth + cardMargin); // 5 tarjetas de ancho
-  const gridHeight = 5 * (cardHeight + cardMargin); // 5 tarjetas de alto
+  const gridWidth = 5 * (cardWidth + cardMargin);
+  const gridHeight = 5 * (cardHeight + cardMargin);
 
-  // Aplicar efecto de "wraparound" a las posiciones
+  // Aplicar efecto de "wraparound"
   const wrappedX = wrapValue(position.x, gridWidth);
   const wrappedY = wrapValue(position.y, gridHeight);
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900">
-      {/* Contenedor de la cuadrícula con eventos de ratón y táctiles */}
+    <div 
+      className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 select-none"
+      style={{
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none'
+      } as React.CSSProperties}
+    >
+      {/* Contenedor de la cuadrícula con eventos mejorados */}
       <div
         ref={gridRef}
-        className="absolute inset-0 cursor-grab active:cursor-grabbing"
+        className={`absolute inset-0 select-none grid-container ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -321,8 +415,15 @@ const InfiniteContentGrid: React.FC = () => {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onDragStart={(e) => e.preventDefault()}
+        style={{ 
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
+        } as React.CSSProperties as React.CSSProperties}
       >
-        {/* Cuadrícula principal y sus 8 "clones" circundantes para efecto infinito */}
+        {/* Cuadrícula principal y sus clones circundantes para efecto infinito */}
         {[-1, 0, 1].map(yOffset => (
           [-1, 0, 1].map(xOffset => (
             <div
@@ -338,7 +439,7 @@ const InfiniteContentGrid: React.FC = () => {
                 <ContentCard
                   key={`${xOffset}-${yOffset}-${item.gridId}`}
                   content={item}
-                  onClick={handleOpenModal}
+                  onClick={handleCardClick}
                 />
               ))}
             </div>
@@ -348,6 +449,33 @@ const InfiniteContentGrid: React.FC = () => {
       
       {/* Modal para mostrar información detallada */}
       <ContentModal content={activeContent} onClose={handleCloseModal} />
+      
+      {/* CSS global para prevenir selección */}
+      <style jsx>{`
+        * {
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          -khtml-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+        }
+        
+        img {
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+          pointer-events: none;
+        }
+        
+        .grid-container * {
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          -ms-user-select: none !important;
+          user-select: none !important;
+        }
+      `}</style>
     </div>
   );
 };
