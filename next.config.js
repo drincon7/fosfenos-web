@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
@@ -12,6 +11,16 @@ const nextConfig = {
         port: "",
       },
     ],
+  },
+  // Configuración para permitir archivos más grandes
+  experimental: {
+    serverComponentsExternalPackages: ['bcryptjs']
+  },
+  // Aumentar límite de tamaño de archivos
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
   },
 };
 

@@ -1,21 +1,44 @@
 "use client";
 import React from "react";
-import { Brand } from "@/types/brand";
 import Image from "next/image";
-import brandData from "./brandData";
+import { useBrands } from "@/lib/hooks/useBrands";
 
 const Brands = () => {
+  const { data: brands, loading, error } = useBrands();
+
+  if (loading) {
+    return (
+      <section className="border border-x-0 border-y-stroke bg-alabaster py-11 dark:border-y-strokedark dark:bg-black overflow-hidden">
+        <div className="brands-wrapper">
+          <div className="marquee-container">
+            <div className="marquee">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div key={index} className="brand-item">
+                  <div className="relative block h-12 w-[120px] bg-gray-200 dark:bg-gray-700 animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error || !brands || brands.length === 0) {
+    return null; // No mostrar nada si hay error o no hay marcas
+  }
+
+  // Cuadruplicar las marcas para efecto infinito
+  const repeatedBrands = [...brands, ...brands, ...brands, ...brands];
+
   return (
     <>
-      {/* <!-- ===== Clients Start ===== --> */}
       <section className="border border-x-0 border-y-stroke bg-alabaster py-11 dark:border-y-strokedark dark:bg-black overflow-hidden">
-        {/* Eliminamos los contenedores con límites y márgenes */}
         <div className="brands-wrapper">
           {/* Primera fila de marcas - movimiento hacia la derecha */}
           <div className="marquee-container">
             <div className="marquee">
-              {/* Triplicamos el contenido para garantizar cobertura completa */}
-              {[...brandData, ...brandData, ...brandData, ...brandData].map((brand, key) => (
+              {repeatedBrands.map((brand, key) => (
                 <BrandItem brand={brand} key={`row1-${key}`} />
               ))}
             </div>
@@ -24,15 +47,13 @@ const Brands = () => {
           {/* Segunda fila de marcas - movimiento hacia la izquierda */}
           <div className="marquee-container">
             <div className="marquee marquee-reverse">
-              {/* Triplicamos el contenido para garantizar cobertura completa */}
-              {[...brandData.slice().reverse(), ...brandData.slice().reverse(), ...brandData.slice().reverse(), ...brandData.slice().reverse()].map((brand, key) => (
+              {[...repeatedBrands].reverse().map((brand, key) => (
                 <BrandItem brand={brand} key={`row2-${key}`} />
               ))}
             </div>
           </div>
         </div>
       </section>
-      {/* <!-- ===== Clients End ===== --> */}
 
       <style jsx global>{`
         .brands-wrapper {
@@ -97,11 +118,11 @@ const Brands = () => {
 };
 
 // Componente individual para cada marca
-const BrandItem = ({ brand }: { brand: Brand }) => {
+const BrandItem = ({ brand }: { brand: any }) => {
   const { image, href, name, imageLight } = brand;
 
   return (
-    <a href={href} className="brand-item relative block h-12 w-[120px]">
+    <a href={href || '#'} className="brand-item relative block h-12 w-[120px]">
       <Image
         className="transition-all duration-300 dark:hidden"
         src={image}

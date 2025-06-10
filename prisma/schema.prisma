@@ -1,0 +1,193 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // Para desarrollo, usar "postgresql" para producción
+  url      = env("DATABASE_URL")
+}
+
+// Modelo de usuarios para autenticación
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+}
+
+// Modelo para contenido infantil
+model ChildContent {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  subtitle    String?
+  videoUrl    String
+  posterImage String
+  synopsis    String
+  published   Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Información técnica
+  technicalInfo TechnicalInfo?
+  
+  // Premios y nominaciones
+  awards      Award[]
+  
+  // Plataformas de distribución
+  platforms   Platform[]
+  
+  // Información adicional
+  additionalInfo AdditionalInfo?
+}
+
+model TechnicalInfo {
+  id                    String       @id @default(cuid())
+  formato               String
+  duracion              String
+  genero                String
+  publico               String
+  estado                String
+  empresaProductora     String
+  paisProductora        String
+  empresaCoproductora   String?
+  paisCoproductora      String?
+  
+  childContent          ChildContent @relation(fields: [childContentId], references: [id], onDelete: Cascade)
+  childContentId        String       @unique
+}
+
+model Award {
+  id          String       @id @default(cuid())
+  title       String
+  category    String
+  year        Int
+  country     String
+  status      AwardStatus
+  festival    String
+  order       Int          @default(0)
+  
+  childContent   ChildContent @relation(fields: [childContentId], references: [id], onDelete: Cascade)
+  childContentId String
+}
+
+enum AwardStatus {
+  GANADOR
+  NOMINACION
+  MENCION
+}
+
+model Platform {
+  id          String       @id @default(cuid())
+  name        String
+  url         String
+  icon        String
+  order       Int          @default(0)
+  
+  childContent   ChildContent @relation(fields: [childContentId], references: [id], onDelete: Cascade)
+  childContentId String
+}
+
+model AdditionalInfo {
+  id           String       @id @default(cuid())
+  pressbook    String?
+  website      String?
+  facebook     String?
+  instagram    String?
+  
+  childContent   ChildContent @relation(fields: [childContentId], references: [id], onDelete: Cascade)
+  childContentId String       @unique
+}
+
+// Modelo para miembros del equipo
+model TeamMember {
+  id         String   @id @default(cuid())
+  nombre     String
+  cargo      String
+  imagen     String
+  imagenDark String?
+  order      Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([nombre, cargo])
+}
+
+// Modelo para servicios
+model Service {
+  id          String   @id @default(cuid())
+  title       String   @unique
+  description String
+  icon        String
+  gradient    String
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  features ServiceFeature[]
+}
+
+model ServiceFeature {
+  id          String  @id @default(cuid())
+  title       String
+  order       Int     @default(0)
+  
+  service     Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  serviceId   String
+
+  @@unique([serviceId, title])
+}
+
+// Modelo para marcas/clientes
+model Brand {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  href       String
+  image      String
+  imageLight String
+  order      Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Modelo para blog posts
+model BlogPost {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  metadata    String?
+  content     String?
+  mainImage   String
+  published   Boolean  @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Modelo para configuraciones generales del sitio
+model SiteConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  type  ConfigType @default(TEXT)
+}
+
+enum ConfigType {
+  TEXT
+  IMAGE
+  JSON
+  BOOLEAN
+}
