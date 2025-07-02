@@ -2,12 +2,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ChildContentService } from '@/lib/database';
 
+// Tipos actualizados para Next.js 15
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteParams
 ) {
   try {
-    const result = await ChildContentService.getById(params.id);
+    // Await params en Next.js 15
+    const { id } = await context.params;
+    
+    const result = await ChildContentService.getById(id);
     if (!result) {
       return NextResponse.json(
         { success: false, error: 'Contenido no encontrado' },
@@ -26,11 +34,14 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteParams
 ) {
   try {
+    // Await params en Next.js 15
+    const { id } = await context.params;
     const data = await request.json();
-    const result = await ChildContentService.update(params.id, data);
+    
+    const result = await ChildContentService.update(id, data);
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     console.error('Error updating child content:', error);
@@ -43,10 +54,13 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteParams
 ) {
   try {
-    await ChildContentService.delete(params.id);
+    // Await params en Next.js 15
+    const { id } = await context.params;
+    
+    await ChildContentService.delete(id);
     return NextResponse.json({ success: true, message: 'Contenido eliminado' });
   } catch (error) {
     console.error('Error deleting child content:', error);

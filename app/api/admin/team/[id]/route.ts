@@ -1,12 +1,21 @@
-import { NextResponse } from 'next/server';
+// app/api/admin/team/[id]/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 import { TeamMemberService } from '@/lib/database';
 
+// Tipos actualizados para Next.js 15
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteParams
 ) {
   try {
-    const member = await TeamMemberService.getById(params.id);
+    // Await params en Next.js 15
+    const { id } = await context.params;
+    
+    const member = await TeamMemberService.getById(id);
     
     if (!member) {
       return NextResponse.json(
@@ -29,12 +38,15 @@ export async function GET(
 }
 
 export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteParams
 ) {
   try {
+    // Await params en Next.js 15
+    const { id } = await context.params;
     const data = await request.json();
-    const updatedMember = await TeamMemberService.update(params.id, data);
+    
+    const updatedMember = await TeamMemberService.update(id, data);
     
     return NextResponse.json({
       success: true,
@@ -50,11 +62,14 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteParams
 ) {
   try {
-    await TeamMemberService.delete(params.id);
+    // Await params en Next.js 15
+    const { id } = await context.params;
+    
+    await TeamMemberService.delete(id);
     
     return NextResponse.json({
       success: true,

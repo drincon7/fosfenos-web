@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   images: {
     domains: ["localhost"],
     remotePatterns: [
@@ -12,16 +11,8 @@ const nextConfig = {
       },
     ],
   },
-  // Configuración para permitir archivos más grandes
-  experimental: {
-    serverComponentsExternalPackages: ['bcryptjs']
-  },
-  // Aumentar límite de tamaño de archivos
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
+  // Configuración actualizada para Next.js 15
+  serverExternalPackages: ['bcryptjs'],
 };
 
 module.exports = nextConfig;
