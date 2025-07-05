@@ -1,3 +1,4 @@
+// components/admin/AdminSidebar.tsx (VERSIÓN ACTUALIZADA)
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -13,7 +14,9 @@ import {
   ChevronRight,
   BarChart3,
   FileText,
-  Image
+  Image,
+  Grid3X3,
+  Sparkles
 } from 'lucide-react';
 
 interface MenuItem {
@@ -41,6 +44,12 @@ const menuItems: MenuItem[] = [
         title: 'Contenido Infantil',
         icon: Baby,
         href: '/admin/content/child-content'
+      },
+      {
+        id: 'infinite-content',
+        title: 'Contenido Infinito',
+        icon: Grid3X3,
+        href: '/admin/infinite-content'
       },
       {
         id: 'blog',
@@ -152,6 +161,12 @@ export default function AdminSidebar() {
       >
         <Icon size={20} className="mr-3" />
         {item.title}
+        {/* Badge para nuevas funcionalidades */}
+        {item.id === 'infinite-content' && (
+          <span className="ml-auto">
+            <Sparkles size={14} className="text-yellow-400" />
+          </span>
+        )}
       </Link>
     );
   };
@@ -165,7 +180,7 @@ export default function AdminSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4">
+      <nav className="flex-1 py-4 overflow-y-auto">
         {menuItems.map(item => renderMenuItem(item))}
       </nav>
 

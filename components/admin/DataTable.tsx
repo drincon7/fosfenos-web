@@ -1,6 +1,7 @@
+// components/admin/DataTable.tsx (VERSIÓN ACTUALIZADA)
 'use client';
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Search, Filter, MoreHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, Filter, MoreHorizontal, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 import { Card } from './Card';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -12,6 +13,13 @@ interface Column<T> {
   render?: (value: any, record: T) => React.ReactNode;
   sortable?: boolean;
   width?: string;
+}
+
+interface Pagination {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 interface DataTableProps<T> {
@@ -26,6 +34,10 @@ interface DataTableProps<T> {
   description?: string;
   emptyStateTitle?: string;
   emptyStateDescription?: string;
+  pagination?: Pagination;
+  onPageChange?: (page: number) => void;
+  additionalActions?: (record: T) => React.ReactNode;
+  showSearch?: boolean;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -39,7 +51,11 @@ export function DataTable<T extends Record<string, any>>({
   title,
   description,
   emptyStateTitle = "No hay datos",
-  emptyStateDescription = "No se encontraron elementos."
+  emptyStateDescription = "No se encontraron elementos.",
+  pagination,
+  onPageChange,
+  additionalActions,
+  showSearch = true
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{
@@ -47,17 +63,17 @@ export function DataTable<T extends Record<string, any>>({
     direction: 'asc' | 'desc';
   } | null>(null);
 
-  // Filtrar datos
-  const filteredData = data.filter(item => {
+  // Filtrar datos localmente solo si no hay paginación del servidor
+  const filteredData = !pagination ? data.filter(item => {
     if (!searchTerm) return true;
     
     return Object.values(item).some(value => 
       String(value).toLowerCase().includes(searchTerm.toLowerCase())
     );
-  });
+  }) : data;
 
-  // Ordenar datos
-  const sortedData = [...filteredData].sort((a, b) => {
+  // Ordenar datos localmente solo si no hay paginación del servidor
+  const sortedData = !pagination ? [...filteredData].sort((a, b) => {
     if (!sortConfig) return 0;
     
     const aValue = a[sortConfig.key];
@@ -66,7 +82,7 @@ export function DataTable<T extends Record<string, any>>({
     if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
     if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
-  });
+  }) : filteredData;
 
   const handleSort = (key: string) => {
     setSortConfig(current => {
@@ -86,6 +102,94 @@ export function DataTable<T extends Record<string, any>>({
       : record[column.key as keyof T];
     
     return column.render ? column.render(value, record) : String(value || '');
+  };
+
+  // Componente de paginación
+  const PaginationComponent = () => {
+    if (!pagination || !onPageChange) return null;
+
+    const { page, totalPages, total, pageSize } = pagination;
+    const startItem = (page - 1) * pageSize + 1;
+    const endItem = Math.min(page * pageSize, total);
+
+    // Generar páginas para mostrar
+    const getPageNumbers = (): (number | string)[] => {
+      const delta = 2;
+      const range: number[] = [];
+      const rangeWithDots: (number | string)[] = [];
+
+      for (let i = Math.max(2, page - delta); i <= Math.min(totalPages - 1, page + delta); i++) {
+        range.push(i);
+      }
+
+      if (page - delta > 2) {
+        rangeWithDots.push(1, '...');
+      } else {
+        rangeWithDots.push(1);
+      }
+
+      rangeWithDots.push(...range);
+
+      if (page + delta < totalPages - 1) {
+        rangeWithDots.push('...', totalPages);
+      } else if (totalPages > 1) {
+        rangeWithDots.push(totalPages);
+      }
+
+      return rangeWithDots;
+    };
+
+    return (
+      <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-700">
+            Mostrando {startItem} a {endItem} de {total} elementos
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
+              icon={<ChevronLeft size={16} />}
+            >
+              Anterior
+            </Button>
+
+            <div className="flex items-center space-x-1">
+              {getPageNumbers().map((pageNum, index) => (
+                pageNum === '...' ? (
+                  <span key={index} className="px-2 py-1 text-gray-500">...</span>
+                ) : (
+                  <button
+                    key={index}
+                    onClick={() => onPageChange(pageNum as number)}
+                    className={`px-3 py-1 text-sm rounded transition-colors ${
+                      pageNum === page
+                        ? 'bg-purple-600 text-white'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              ))}
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= totalPages}
+              icon={<ChevronRight size={16} />}
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -117,23 +221,25 @@ export function DataTable<T extends Record<string, any>>({
 
       <Card padding={false}>
         {/* Filters */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center space-x-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
+        {showSearch && (
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center space-x-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder={searchPlaceholder}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <Button variant="secondary" icon={<Filter size={16} />}>
+                Filtros
+              </Button>
             </div>
-            <Button variant="secondary" icon={<Filter size={16} />}>
-              Filtros
-            </Button>
           </div>
-        </div>
+        )}
 
         {/* Table */}
         {sortedData.length === 0 ? (
@@ -186,7 +292,7 @@ export function DataTable<T extends Record<string, any>>({
                       </div>
                     </th>
                   ))}
-                  {(onEdit || onDelete) && (
+                  {(onEdit || onDelete || additionalActions) && (
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Acciones
                     </th>
@@ -201,9 +307,10 @@ export function DataTable<T extends Record<string, any>>({
                         {renderCell(column, record)}
                       </td>
                     ))}
-                    {(onEdit || onDelete) && (
+                    {(onEdit || onDelete || additionalActions) && (
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
+                          {additionalActions && additionalActions(record)}
                           {onEdit && (
                             <Button
                               size="sm"
@@ -232,17 +339,8 @@ export function DataTable<T extends Record<string, any>>({
           </div>
         )}
 
-        {/* Footer */}
-        {sortedData.length > 0 && (
-          <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                Mostrando {sortedData.length} de {data.length} elementos
-                {searchTerm && ` (filtrado por "${searchTerm}")`}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Pagination */}
+        <PaginationComponent />
       </Card>
     </div>
   );

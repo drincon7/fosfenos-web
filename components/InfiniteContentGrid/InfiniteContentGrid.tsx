@@ -1,3 +1,4 @@
+// components/InfiniteContentGrid/InfiniteContentGrid.tsx (VERSIÓN ORIGINAL EXACTA)
 'use client'
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
@@ -176,7 +177,7 @@ const InfiniteContentGrid: React.FC = () => {
       title: "Mundo Animal",
       shortDescription: "Descubre la fauna",
       description: "Una exploración del maravilloso mundo animal, diseñada para despertar la curiosidad y el respeto por la naturaleza.",
-      image: "/images/content/sonic.jpg",
+      image: "/images/content/assassins.webp",
       details: ["Edad recomendada: 4-8 años", "Duración: 18 minutos por episodio", "Temporadas disponibles: 4"]
     },
     {
@@ -184,7 +185,7 @@ const InfiniteContentGrid: React.FC = () => {
       title: "El Bosque Mágico",
       shortDescription: "Fantasía y aventura",
       description: "Una serie encantadora sobre criaturas mágicas que habitan en un bosque misterioso.",
-      image: "/images/content/transformers.jpg",
+      image: "/images/content/castlevania.webp",
       details: ["Edad recomendada: 3-7 años", "Duración: 15 minutos por episodio", "Temporadas disponibles: 2"]
     },
     {
@@ -192,7 +193,7 @@ const InfiniteContentGrid: React.FC = () => {
       title: "Música para Crecer",
       shortDescription: "Aprendizaje musical",
       description: "Programa que introduce conceptos musicales básicos de manera divertida y participativa.",
-      image: "/images/content/assassins.webp",
+      image: "/images/content/dune.webp",
       details: ["Edad recomendada: 2-6 años", "Duración: 12 minutos por episodio", "Temporadas disponibles: 3"]
     },
     {
@@ -200,7 +201,7 @@ const InfiniteContentGrid: React.FC = () => {
       title: "Viaje al Espacio",
       shortDescription: "Astronomía para niños",
       description: "Una aventura espacial que enseña sobre planetas, estrellas y fenómenos espaciales.",
-      image: "/images/content/dune.webp",
+      image: "/images/content/Shingeki_no_Kyojin.webp",
       details: ["Edad recomendada: 6-10 años", "Duración: 22 minutos por episodio", "Temporadas disponibles: 1"]
     },
     {
@@ -208,7 +209,7 @@ const InfiniteContentGrid: React.FC = () => {
       title: "Historias del Mundo",
       shortDescription: "Cuentos tradicionales",
       description: "Colección de cuentos y leyendas de diferentes culturas del mundo, narradas de forma amena para los más pequeños.",
-      image: "/images/content/sonic.jpg",
+      image: "/images/content/assassins.webp",
       details: ["Edad recomendada: 4-9 años", "Duración: 15 minutos por episodio", "Temporadas disponibles: 5"]
     },
   ];
@@ -421,7 +422,7 @@ const InfiniteContentGrid: React.FC = () => {
           WebkitUserSelect: 'none',
           MozUserSelect: 'none',
           msUserSelect: 'none'
-        } as React.CSSProperties as React.CSSProperties}
+        } as React.CSSProperties}
       >
         {/* Cuadrícula principal y sus clones circundantes para efecto infinito */}
         {[-1, 0, 1].map(yOffset => (

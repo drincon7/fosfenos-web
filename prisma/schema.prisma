@@ -177,6 +177,22 @@ model BlogPost {
   updatedAt   DateTime @updatedAt
 }
 
+
+model InfiniteContent {
+  id               String   @id @default(cuid())
+  title            String
+  shortDescription String
+  description      String   
+  image            String
+  details          String   
+  order            Int      @default(0)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("infinite_content")
+}
+
 // Modelo para configuraciones generales del sitio
 model SiteConfig {
   id    String @id @default(cuid())
