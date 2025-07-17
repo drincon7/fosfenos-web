@@ -1,31 +1,53 @@
-// lib/database/infiniteContentService.ts
+// lib/database/infiniteContentService.ts (CORREGIDO)
 import { PrismaClient } from '@prisma/client';
-import type { 
-  InfiniteContentItem, 
-  InfiniteContentFilters, 
-  InfiniteContentResponse,
-  CreateInfiniteContentData,
-  UpdateInfiniteContentData 
-} from '@/types/infiniteContent';
 
 const prisma = new PrismaClient();
 
-export class InfiniteContentService {
-  static async getAll(filters: InfiniteContentFilters): Promise<InfiniteContentResponse> {
+export interface InfiniteContentFilters {
+  search?: string;
+  active?: boolean;
+  orderBy?: 'order' | 'title' | 'createdAt' | 'updatedAt';
+  orderDirection?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateInfiniteContentData {
+  title: string;
+  shortDescription: string;
+  description: string;
+  image?: string;
+  details: string[]; // Siempre es array, no opcional
+  active: boolean;
+  order?: number;
+}
+
+export interface UpdateInfiniteContentData extends Partial<CreateInfiniteContentData> {}
+
+class InfiniteContentService {
+  // Función helper para convertir JsonArray a string[]
+  private convertDetailsToStringArray(details: any): string[] {
+    if (!details) return [];
+    if (Array.isArray(details)) {
+      return details.filter(item => typeof item === 'string');
+    }
+    return [];
+  }
+
+  // Obtener todos los elementos con filtros y paginación
+  async getAll(filters: InfiniteContentFilters = {}) {
     const {
       search,
       active,
-      page = 1,
-      pageSize = 10,
       orderBy = 'order',
-      orderDirection = 'asc'
+      orderDirection = 'asc',
+      page = 1,
+      pageSize = 10
     } = filters;
 
-    const skip = (page - 1) * pageSize;
-
-    // Construir condiciones de filtro
     const where: any = {};
 
+    // Aplicar filtros
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
@@ -34,170 +56,242 @@ export class InfiniteContentService {
       ];
     }
 
-    if (typeof active === 'boolean') {
+    if (active !== undefined) {
       where.active = active;
     }
 
-    try {
-      const [items, total] = await Promise.all([
-        prisma.infiniteContent.findMany({
-          where,
-          orderBy: { [orderBy]: orderDirection },
-          skip,
-          take: pageSize,
-        }),
-        prisma.infiniteContent.count({ where })
-      ]);
+    // Contar total de elementos
+    const total = await prisma.infiniteContent.count({ where });
 
-      const totalPages = Math.ceil(total / pageSize);
+    // Obtener elementos paginados
+    const rawData = await prisma.infiniteContent.findMany({
+      where,
+      orderBy: { [orderBy]: orderDirection },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
 
-      return {
-        data: items.map(this.transformToInfiniteContentItem),
-        total,
-        page,
-        pageSize,
-        totalPages
-      };
-    } catch (error) {
-      console.error('Error fetching infinite content:', error);
-      throw new Error('Failed to fetch infinite content');
-    }
+    // Convertir datos de Prisma a nuestro formato
+    const data = rawData.map(item => ({
+      ...item,
+      details: this.convertDetailsToStringArray(item.details)
+    }));
+
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize)
+    };
   }
 
-  static async getById(id: string): Promise<InfiniteContentItem | null> {
-    try {
-      const item = await prisma.infiniteContent.findUnique({
-        where: { id }
-      });
+  // Obtener por ID
+  async getById(id: string) {
+    const item = await prisma.infiniteContent.findUnique({
+      where: { id }
+    });
 
-      return item ? this.transformToInfiniteContentItem(item) : null;
-    } catch (error) {
-      console.error('Error fetching infinite content by ID:', error);
-      throw new Error('Failed to fetch infinite content');
-    }
+    if (!item) return null;
+
+    return {
+      ...item,
+      details: this.convertDetailsToStringArray(item.details)
+    };
   }
 
-  static async create(data: CreateInfiniteContentData): Promise<InfiniteContentItem> {
-    try {
-      // Obtener el siguiente número de orden
-      const maxOrder = await prisma.infiniteContent.aggregate({
-        _max: { order: true }
+  // Crear nuevo elemento
+  async create(data: CreateInfiniteContentData) {
+    // Si no se especifica un orden, asignar el siguiente disponible
+    if (!data.order) {
+      const lastItem = await prisma.infiniteContent.findFirst({
+        orderBy: { order: 'desc' }
       });
-
-      const newOrder = (maxOrder._max.order || 0) + 1;
-
-      const item = await prisma.infiniteContent.create({
-        data: {
-          title: data.title,
-          shortDescription: data.shortDescription,
-          description: data.description,
-          image: typeof data.image === 'string' ? data.image : '',
-          details: JSON.stringify(data.details), // ESTA ES LA LÍNEA CORRECTA
-          order: newOrder,
-          active: data.active
-        }
-      });
-
-      return this.transformToInfiniteContentItem(item);
-    } catch (error) {
-      console.error('Error creating infinite content:', error);
-      throw new Error('Failed to create infinite content');
+      data.order = lastItem ? lastItem.order + 1 : 1;
     }
+
+    const created = await prisma.infiniteContent.create({
+      data: {
+        title: data.title,
+        shortDescription: data.shortDescription,
+        description: data.description,
+        image: data.image || '',
+        details: data.details, // Prisma maneja automáticamente la conversión a Json
+        active: data.active,
+        order: data.order
+      }
+    });
+
+    return {
+      ...created,
+      details: this.convertDetailsToStringArray(created.details)
+    };
   }
 
-  static async update(id: string, data: Partial<CreateInfiniteContentData>): Promise<InfiniteContentItem> {
-    try {
-      const updateData: any = {};
+  // Actualizar elemento
+  async update(id: string, data: UpdateInfiniteContentData) {
+    const updateData: any = {};
 
-      if (data.title !== undefined) updateData.title = data.title;
-      if (data.shortDescription !== undefined) updateData.shortDescription = data.shortDescription;
-      if (data.description !== undefined) updateData.description = data.description;
-      if (data.details !== undefined) updateData.details = JSON.stringify(data.details);
-      if (data.active !== undefined) updateData.active = data.active;
-      if (typeof data.image === 'string') updateData.image = data.image;
+    // Solo incluir campos que se están actualizando
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.shortDescription !== undefined) updateData.shortDescription = data.shortDescription;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.image !== undefined) updateData.image = data.image;
+    if (data.details !== undefined) updateData.details = data.details;
+    if (data.active !== undefined) updateData.active = data.active;
+    if (data.order !== undefined) updateData.order = data.order;
 
-      const item = await prisma.infiniteContent.update({
-        where: { id },
-        data: updateData
-      });
+    const updated = await prisma.infiniteContent.update({
+      where: { id },
+      data: updateData
+    });
 
-      return this.transformToInfiniteContentItem(item);
-    } catch (error) {
-      console.error('Error updating infinite content:', error);
-      throw new Error('Failed to update infinite content');
-    }
+    return {
+      ...updated,
+      details: this.convertDetailsToStringArray(updated.details)
+    };
   }
 
-  static async delete(id: string): Promise<void> {
-    try {
-      await prisma.infiniteContent.delete({
-        where: { id }
-      });
-    } catch (error) {
-      console.error('Error deleting infinite content:', error);
-      throw new Error('Failed to delete infinite content');
-    }
+  // Eliminar elemento
+  async delete(id: string) {
+    return await prisma.infiniteContent.delete({
+      where: { id }
+    });
   }
 
-  static async reorder(items: { id: string; order: number }[]): Promise<void> {
-    try {
-      const updates = items.map(item => 
-        prisma.infiniteContent.update({
+  // Reordenar elementos
+  async reorder(items: { id: string; order: number }[]) {
+    // Usar transacción para asegurar consistencia
+    return await prisma.$transaction(async (tx) => {
+      const updates = items.map(item =>
+        tx.infiniteContent.update({
           where: { id: item.id },
           data: { order: item.order }
         })
       );
-
-      await Promise.all(updates);
-    } catch (error) {
-      console.error('Error reordering infinite content:', error);
-      throw new Error('Failed to reorder infinite content');
-    }
+      
+      return await Promise.all(updates);
+    });
   }
 
-  static async updateImage(id: string, imagePath: string): Promise<InfiniteContentItem> {
-    try {
-      const item = await prisma.infiniteContent.update({
-        where: { id },
-        data: { image: imagePath }
-      });
-
-      return this.transformToInfiniteContentItem(item);
-    } catch (error) {
-      console.error('Error updating infinite content image:', error);
-      throw new Error('Failed to update infinite content image');
+  // Alternar estado activo
+  async toggleActive(id: string) {
+    const current = await this.getById(id);
+    if (!current) {
+      throw new Error('Elemento no encontrado');
     }
+
+    return await this.update(id, { active: !current.active });
   }
 
-  private static transformToInfiniteContentItem(item: any): InfiniteContentItem {
-    let details: string[] = [];
-    
-    try {
-      if (item.details) {
-        if (typeof item.details === 'string') {
-          details = JSON.parse(item.details);
-        } else if (Array.isArray(item.details)) {
-          details = item.details;
-        }
-      }
-    } catch (error) {
-      console.warn('Error parsing details for item:', item.id, error);
-      details = [];
+  // Obtener el siguiente número de orden disponible
+  async getNextOrder() {
+    const lastItem = await prisma.infiniteContent.findFirst({
+      orderBy: { order: 'desc' }
+    });
+    return lastItem ? lastItem.order + 1 : 1;
+  }
+
+  // Duplicar un elemento
+  async duplicate(id: string) {
+    const original = await this.getById(id);
+    if (!original) {
+      throw new Error('Elemento no encontrado');
     }
+
+    const nextOrder = await this.getNextOrder();
+
+    return await this.create({
+      title: `${original.title} (Copia)`,
+      shortDescription: original.shortDescription,
+      description: original.description,
+      image: original.image,
+      details: original.details, // Ya es string[] gracias a convertDetailsToStringArray
+      active: false, // Crear como inactivo por defecto
+      order: nextOrder
+    });
+  }
+
+  // Mover elemento hacia arriba en el orden
+  async moveUp(id: string) {
+    const current = await this.getById(id);
+    if (!current) {
+      throw new Error('Elemento no encontrado');
+    }
+
+    // Encontrar el elemento inmediatamente anterior
+    const previous = await prisma.infiniteContent.findFirst({
+      where: { order: { lt: current.order } },
+      orderBy: { order: 'desc' }
+    });
+
+    if (previous) {
+      // Intercambiar órdenes
+      await this.reorder([
+        { id: current.id, order: previous.order },
+        { id: previous.id, order: current.order }
+      ]);
+    }
+
+    return await this.getById(id);
+  }
+
+  // Mover elemento hacia abajo en el orden
+  async moveDown(id: string) {
+    const current = await this.getById(id);
+    if (!current) {
+      throw new Error('Elemento no encontrado');
+    }
+
+    // Encontrar el elemento inmediatamente siguiente
+    const next = await prisma.infiniteContent.findFirst({
+      where: { order: { gt: current.order } },
+      orderBy: { order: 'asc' }
+    });
+
+    if (next) {
+      // Intercambiar órdenes
+      await this.reorder([
+        { id: current.id, order: next.order },
+        { id: next.id, order: current.order }
+      ]);
+    }
+
+    return await this.getById(id);
+  }
+
+  // Obtener estadísticas
+  async getStats() {
+    const [total, active, inactive] = await Promise.all([
+      prisma.infiniteContent.count(),
+      prisma.infiniteContent.count({ where: { active: true } }),
+      prisma.infiniteContent.count({ where: { active: false } })
+    ]);
 
     return {
-      id: item.id,
-      title: item.title,
-      shortDescription: item.shortDescription,
-      description: item.description,
-      image: item.image,
-      details: Array.isArray(details) ? details : [],
-      order: item.order,
-      active: item.active,
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString()
+      total,
+      active,
+      inactive,
+      percentage: total > 0 ? Math.round((active / total) * 100) : 0
     };
+  }
+
+  // Buscar elementos similares por título
+  async findSimilar(title: string, excludeId?: string) {
+    const where: any = {
+      title: { contains: title, mode: 'insensitive' }
+    };
+
+    if (excludeId) {
+      where.id = { not: excludeId };
+    }
+
+    return await prisma.infiniteContent.findMany({
+      where,
+      select: { id: true, title: true, active: true },
+      take: 5
+    });
   }
 }
 
-export default InfiniteContentService;
+export default new InfiniteContentService();

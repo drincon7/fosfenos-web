@@ -1,7 +1,7 @@
-// app/admin/infinite-content/page.tsx (CORREGIDA)
+// app/admin/infinite-content/page.tsx (MEJORADO)
 'use client';
 import { useState } from 'react';
-import { Plus, Edit, Trash2, Eye, Search, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Search, Filter, MoreVertical, ArrowUp, ArrowDown, Copy, Power, PowerOff } from 'lucide-react';
 import { DataTable } from '@/components/admin/DataTable';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { Button } from '@/components/admin/Button';
@@ -20,12 +20,41 @@ interface TableColumn {
 
 export default function InfiniteContentManagementPage() {
   const { data, loading, error, pagination, updateFilters, refresh } = useInfiniteContent();
-  const { deleteItem } = useInfiniteContentAdmin();
+  const { deleteItem, toggleActive, duplicateItem, moveUp, moveDown } = useInfiniteContentAdmin();
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InfiniteContentItem | null>(null);
   const [viewingItem, setViewingItem] = useState<InfiniteContentItem | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const columns: TableColumn[] = [
+    {
+      key: 'order',
+      title: '#',
+      width: '60px',
+      render: (value: number, record: InfiniteContentItem) => (
+        <div className="flex flex-col items-center gap-1">
+          <span className="font-mono text-sm font-medium">{value}</span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => handleMoveUp(record)}
+              disabled={actionLoading === `move-up-${record.id}`}
+              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+              title="Mover arriba"
+            >
+              <ArrowUp size={12} />
+            </button>
+            <button
+              onClick={() => handleMoveDown(record)}
+              disabled={actionLoading === `move-down-${record.id}`}
+              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+              title="Mover abajo"
+            >
+              <ArrowDown size={12} />
+            </button>
+          </div>
+        </div>
+      )
+    },
     {
       key: 'image',
       title: 'Imagen',
@@ -49,8 +78,10 @@ export default function InfiniteContentManagementPage() {
       sortable: true,
       render: (value: string, record: InfiniteContentItem) => (
         <div>
-          <div className="font-medium text-gray-900">{value}</div>
-          <div className="text-sm text-gray-500 line-clamp-1">{record.shortDescription}</div>
+          <div className="font-medium text-gray-900 line-clamp-1" title={value}>{value}</div>
+          <div className="text-sm text-gray-500 line-clamp-1" title={record.shortDescription}>
+            {record.shortDescription}
+          </div>
         </div>
       )
     },
@@ -83,25 +114,26 @@ export default function InfiniteContentManagementPage() {
     {
       key: 'active',
       title: 'Estado',
-      render: (value: boolean) => (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          value 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-red-100 text-red-800'
-        }`}>
+      render: (value: boolean, record: InfiniteContentItem) => (
+        <button
+          onClick={() => handleToggleActive(record)}
+          disabled={actionLoading === `toggle-${record.id}`}
+          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+            value 
+              ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+              : 'bg-red-100 text-red-800 hover:bg-red-200'
+          } ${actionLoading === `toggle-${record.id}` ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          title={`Clic para ${value ? 'desactivar' : 'activar'}`}
+        >
+          {actionLoading === `toggle-${record.id}` ? (
+            <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1" />
+          ) : (
+            value ? <Power size={12} className="mr-1" /> : <PowerOff size={12} className="mr-1" />
+          )}
           {value ? 'Activo' : 'Inactivo'}
-        </span>
+        </button>
       ),
       sortable: true
-    },
-    {
-      key: 'order',
-      title: 'Orden',
-      sortable: true,
-      width: '80px',
-      render: (value: number) => (
-        <span className="font-mono text-sm">{value}</span>
-      )
     },
     {
       key: 'updatedAt',
@@ -135,6 +167,7 @@ export default function InfiniteContentManagementPage() {
 
   const handleDelete = async (item: InfiniteContentItem) => {
     if (window.confirm(`¿Estás seguro de que quieres eliminar "${item.title}"?`)) {
+      setActionLoading(`delete-${item.id}`);
       try {
         const result = await deleteItem(item.id);
         if (result.success) {
@@ -145,7 +178,77 @@ export default function InfiniteContentManagementPage() {
       } catch (error) {
         console.error('Error eliminando elemento:', error);
         alert('Error al eliminar el elemento');
+      } finally {
+        setActionLoading(null);
       }
+    }
+  };
+
+  const handleToggleActive = async (item: InfiniteContentItem) => {
+    setActionLoading(`toggle-${item.id}`);
+    try {
+      const result = await toggleActive(item.id, item.active);
+      if (result.success) {
+        refresh();
+      } else {
+        alert(`Error al cambiar estado: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error cambiando estado:', error);
+      alert('Error al cambiar el estado');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDuplicate = async (item: InfiniteContentItem) => {
+    setActionLoading(`duplicate-${item.id}`);
+    try {
+      const result = await duplicateItem(item);
+      if (result.success) {
+        refresh();
+      } else {
+        alert(`Error al duplicar: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error duplicando elemento:', error);
+      alert('Error al duplicar el elemento');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleMoveUp = async (item: InfiniteContentItem) => {
+    setActionLoading(`move-up-${item.id}`);
+    try {
+      const result = await moveUp(item.id);
+      if (result.success) {
+        refresh();
+      } else {
+        alert(`Error al mover: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error moviendo elemento:', error);
+      alert('Error al mover el elemento');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleMoveDown = async (item: InfiniteContentItem) => {
+    setActionLoading(`move-down-${item.id}`);
+    try {
+      const result = await moveDown(item.id);
+      if (result.success) {
+        refresh();
+      } else {
+        alert(`Error al mover: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error moviendo elemento:', error);
+      alert('Error al mover el elemento');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -205,167 +308,4 @@ export default function InfiniteContentManagementPage() {
       </div>
     );
   }
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Contenido Infinito"
-        description="Gestiona el contenido para la cuadrícula infinita"
-      >
-        <Button onClick={handleAdd} icon={<Plus size={20} />}>
-          Añadir Contenido
-        </Button>
-      </PageHeader>
-
-      {/* Filtros adicionales */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex-1 min-w-64">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por título, descripción..."
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                onChange={(e) => handleSearch(e.target.value)}
-              />
-            </div>
-          </div>
-          
-          <select
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            onChange={(e) => handleFilterChange({ 
-              active: e.target.value === '' ? undefined : e.target.value === 'true' 
-            })}
-          >
-            <option value="">Todos los estados</option>
-            <option value="true">Solo activos</option>
-            <option value="false">Solo inactivos</option>
-          </select>
-
-          <Button 
-            variant="secondary" 
-            icon={<Filter size={16} />}
-            onClick={() => updateFilters({ search: undefined, active: undefined, page: 1 })}
-          >
-            Limpiar filtros
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabla de datos */}
-      <DataTable
-        data={data || []}
-        columns={columns}
-        loading={loading}
-        onAdd={handleAdd}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        searchPlaceholder="Buscar contenido..."
-        emptyStateTitle="No hay contenido registrado"
-        emptyStateDescription="Comienza añadiendo el primer elemento de contenido."
-        pagination={pagination}
-        onPageChange={handlePageChange}
-        additionalActions={(record) => (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => handleView(record)}
-            icon={<Eye size={16} />}
-          >
-            Ver
-          </Button>
-        )}
-      />
-
-      {/* Modal para crear/editar */}
-      <InfiniteContentModal
-        isOpen={showModal}
-        onClose={handleCloseModal}
-        item={editingItem}
-        onSaveSuccess={handleSaveSuccess}
-      />
-
-      {/* Modal para ver detalles */}
-      {viewingItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {viewingItem.title}
-                </h3>
-                <button
-                  onClick={() => setViewingItem(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <img 
-                    src={viewingItem.image} 
-                    alt={viewingItem.title}
-                    className="w-full h-48 object-cover rounded-lg"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/images/content/default.jpg';
-                    }}
-                  />
-                </div>
-                
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Descripción corta:</h4>
-                  <p className="text-gray-600">{viewingItem.shortDescription}</p>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Descripción completa:</h4>
-                  <p className="text-gray-600">{viewingItem.description}</p>
-                </div>
-                
-                {viewingItem.details && viewingItem.details.length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Detalles:</h4>
-                    <ul className="list-disc list-inside space-y-1">
-                      {viewingItem.details.map((detail, index) => (
-                        <li key={index} className="text-gray-600">{detail}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <div className="text-sm text-gray-500">
-                    <div>Orden: {viewingItem.order}</div>
-                    <div>Estado: {viewingItem.active ? 'Activo' : 'Inactivo'}</div>
-                  </div>
-                  <div className="flex space-x-3">
-                    <Button
-                      variant="secondary"
-                      onClick={() => setViewingItem(null)}
-                    >
-                      Cerrar
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setViewingItem(null);
-                        handleEdit(viewingItem);
-                      }}
-                      icon={<Edit size={16} />}
-                    >
-                      Editar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }

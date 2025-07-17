@@ -5,7 +5,15 @@ import { FormField, Input, TextArea, Switch } from './FormField';
 import { ImageUpload } from './ImageUpload';
 import { Button } from './Button';
 import { useInfiniteContentAdmin } from '@/lib/hooks/useInfiniteContentAdmin';
-import type { InfiniteContentItem, CreateInfiniteContentData } from '@/types/infiniteContent';
+import { 
+  validateInfiniteContentData,
+  INFINITE_CONTENT_CONSTANTS 
+} from '@/types/infiniteContent';
+import type { 
+  InfiniteContentItem, 
+  CreateInfiniteContentData,
+  InfiniteContentValidationErrors 
+} from '@/types/infiniteContent';
 
 interface InfiniteContentModalProps {
   isOpen: boolean;
@@ -20,7 +28,7 @@ export const InfiniteContentModal = ({
   item, 
   onSaveSuccess 
 }: InfiniteContentModalProps) => {
-  const { createItem, updateItem, uploadImage, loading } = useInfiniteContentAdmin();
+  const { createItem, updateItem, loading } = useInfiniteContentAdmin();
   
   const [formData, setFormData] = useState<CreateInfiniteContentData>({
     title: '',
@@ -33,8 +41,9 @@ export const InfiniteContentModal = ({
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [detailInput, setDetailInput] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<InfiniteContentValidationErrors>({});
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   // Resetear formulario cuando se abre/cierra el modal o cambia el item
   useEffect(() => {
@@ -61,56 +70,81 @@ export const InfiniteContentModal = ({
       setImage(null);
       setDetailInput('');
       setErrors({});
+      setTouched({});
     }
   }, [isOpen, item]);
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.title.trim()) {
-      newErrors.title = 'El título es requerido';
+  // Validación en tiempo real
+  useEffect(() => {
+    if (Object.keys(touched).length > 0) {
+      const validationErrors = validateInfiniteContentData({
+        ...formData,
+        image: image || imagePreview || undefined
+      });
+      setErrors(validationErrors);
     }
-    if (!formData.shortDescription.trim()) {
-      newErrors.shortDescription = 'La descripción corta es requerida';
-    }
-    if (!formData.description.trim()) {
-      newErrors.description = 'La descripción es requerida';
-    }
-    if (!item && !image && !imagePreview) {
-      newErrors.image = 'La imagen es requerida';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  }, [formData, image, imagePreview, touched]);
 
   const handleInputChange = (field: keyof CreateInfiniteContentData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Limpiar error del campo cuando el usuario empiece a escribir
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
+  const handleInputBlur = (field: keyof CreateInfiniteContentData) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
   };
 
   const handleImageChange = (file: File | null, previewUrl: string | null) => {
     setImage(file);
     setImagePreview(previewUrl);
-    if (errors.image) {
-      setErrors(prev => ({ ...prev, image: '' }));
-    }
+    setTouched(prev => ({ ...prev, image: true }));
   };
 
   const handleAddDetail = () => {
-    if (detailInput.trim()) {
-      const newDetails = [...formData.details, detailInput.trim()];
+    const trimmedDetail = detailInput.trim();
+    if (trimmedDetail && (formData.details || []).length < INFINITE_CONTENT_CONSTANTS.MAX_DETAILS) {
+      const newDetails = [...(formData.details || []), trimmedDetail];
       setFormData(prev => ({ ...prev, details: newDetails }));
       setDetailInput('');
+      setTouched(prev => ({ ...prev, details: true }));
     }
   };
 
   const handleRemoveDetail = (index: number) => {
-    const newDetails = formData.details.filter((_, i) => i !== index);
+    const newDetails = (formData.details || []).filter((_, i) => i !== index);
     setFormData(prev => ({ ...prev, details: newDetails }));
+    setTouched(prev => ({ ...prev, details: true }));
+  };
+
+  const handleEditDetail = (index: number, newValue: string) => {
+    const newDetails = [...(formData.details || [])];
+    newDetails[index] = newValue;
+    setFormData(prev => ({ ...prev, details: newDetails }));
+    setTouched(prev => ({ ...prev, details: true }));
+  };
+
+  const validateForm = (): boolean => {
+    // Marcar todos los campos como touched para mostrar errores
+    setTouched({
+      title: true,
+      shortDescription: true,
+      description: true,
+      image: true,
+      details: true
+    });
+
+    const validationErrors = validateInfiniteContentData({
+      ...formData,
+      image: image || imagePreview || undefined
+    });
+
+    // Validación adicional para imagen requerida en nuevos elementos
+    if (!item && !image && !imagePreview) {
+      validationErrors.image = 'La imagen es requerida';
+    }
+
+    setErrors(validationErrors);
+    return Object.keys(validationErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,22 +157,9 @@ export const InfiniteContentModal = ({
     setSaving(true);
     
     try {
-      let imageUrl = imagePreview;
-
-      // Subir nueva imagen si existe
-      if (image) {
-        const uploadResult = await uploadImage(image);
-        if (uploadResult.success) {
-          imageUrl = uploadResult.url!;
-        } else {
-          setErrors({ submit: uploadResult.error || 'Error al subir la imagen' });
-          return;
-        }
-      }
-
-      const submitData = {
+      const submitData: CreateInfiniteContentData = {
         ...formData,
-        image: imageUrl
+        image: image || imagePreview || undefined
       };
 
       let result;
@@ -167,10 +188,36 @@ export const InfiniteContentModal = ({
     }
   };
 
+  const hasUnsavedChanges = () => {
+    if (!item) {
+      return formData.title || formData.shortDescription || formData.description || 
+             (formData.details || []).length > 0 || image;
+    }
+    
+    return (
+      formData.title !== item.title ||
+      formData.shortDescription !== item.shortDescription ||
+      formData.description !== item.description ||
+      formData.active !== item.active ||
+      JSON.stringify(formData.details || []) !== JSON.stringify(item.details || []) ||
+      image !== null
+    );
+  };
+
+  const handleCloseWithConfirmation = () => {
+    if (hasUnsavedChanges()) {
+      if (window.confirm('¿Estás seguro de que quieres cerrar? Los cambios no guardados se perderán.')) {
+        handleClose();
+      }
+    } else {
+      handleClose();
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleClose}
+      onClose={handleCloseWithConfirmation}
       title={item ? 'Editar Contenido' : 'Nuevo Contenido'}
       size="xl"
     >
@@ -184,36 +231,57 @@ export const InfiniteContentModal = ({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Columna izquierda */}
           <div className="space-y-6">
-            <FormField label="Título" required error={errors.title}>
+            <FormField 
+              label="Título" 
+              required 
+              error={touched.title ? errors.title : undefined}
+              description={`${formData.title.length}/${INFINITE_CONTENT_CONSTANTS.TITLE_MAX_LENGTH} caracteres`}
+            >
               <Input
                 type="text"
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
+                onBlur={() => handleInputBlur('title')}
                 placeholder="Ej: Aventuras de Luna"
-                error={!!errors.title}
+                error={touched.title && !!errors.title}
                 disabled={saving}
+                maxLength={INFINITE_CONTENT_CONSTANTS.TITLE_MAX_LENGTH}
               />
             </FormField>
 
-            <FormField label="Descripción Corta" required error={errors.shortDescription}>
+            <FormField 
+              label="Descripción Corta" 
+              required 
+              error={touched.shortDescription ? errors.shortDescription : undefined}
+              description={`${formData.shortDescription.length}/${INFINITE_CONTENT_CONSTANTS.SHORT_DESCRIPTION_MAX_LENGTH} caracteres`}
+            >
               <Input
                 type="text"
                 value={formData.shortDescription}
                 onChange={(e) => handleInputChange('shortDescription', e.target.value)}
+                onBlur={() => handleInputBlur('shortDescription')}
                 placeholder="Ej: Serie animada educativa"
-                error={!!errors.shortDescription}
+                error={touched.shortDescription && !!errors.shortDescription}
                 disabled={saving}
+                maxLength={INFINITE_CONTENT_CONSTANTS.SHORT_DESCRIPTION_MAX_LENGTH}
               />
             </FormField>
 
-            <FormField label="Descripción Completa" required error={errors.description}>
+            <FormField 
+              label="Descripción Completa" 
+              required 
+              error={touched.description ? errors.description : undefined}
+              description={`${formData.description.length}/${INFINITE_CONTENT_CONSTANTS.DESCRIPTION_MAX_LENGTH} caracteres`}
+            >
               <TextArea
                 value={formData.description}
                 onChange={(e) => handleInputChange('description', e.target.value)}
+                onBlur={() => handleInputBlur('description')}
                 placeholder="Descripción detallada del contenido..."
                 rows={4}
-                error={!!errors.description}
+                error={touched.description && !!errors.description}
                 disabled={saving}
+                maxLength={INFINITE_CONTENT_CONSTANTS.DESCRIPTION_MAX_LENGTH}
               />
             </FormField>
 
@@ -229,18 +297,25 @@ export const InfiniteContentModal = ({
 
           {/* Columna derecha */}
           <div className="space-y-6">
-            <FormField label="Imagen" required={!item} error={errors.image}>
+            <FormField 
+              label="Imagen" 
+              required={!item} 
+              error={touched.image ? errors.image : undefined}
+            >
               <ImageUpload
                 currentImage={imagePreview || undefined}
                 onImageChange={handleImageChange}
                 label=""
-                error={errors.image}
+                error={touched.image ? errors.image : undefined}
+                maxSize={INFINITE_CONTENT_CONSTANTS.IMAGE_MAX_SIZE / (1024 * 1024)}
+                accept={INFINITE_CONTENT_CONSTANTS.SUPPORTED_IMAGE_TYPES.join(',')}
               />
             </FormField>
 
             <FormField 
               label="Detalles" 
-              description="Información adicional que se mostrará en el modal"
+              description={`Información adicional (${(formData.details || []).length}/${INFINITE_CONTENT_CONSTANTS.MAX_DETAILS} máximo)`}
+              error={touched.details ? errors.details : undefined}
             >
               <div className="space-y-3">
                 <div className="flex gap-2">
@@ -249,7 +324,8 @@ export const InfiniteContentModal = ({
                     value={detailInput}
                     onChange={(e) => setDetailInput(e.target.value)}
                     placeholder="Ej: Edad recomendada: 3-6 años"
-                    disabled={saving}
+                    disabled={saving || (formData.details || []).length >= INFINITE_CONTENT_CONSTANTS.MAX_DETAILS}
+                    maxLength={INFINITE_CONTENT_CONSTANTS.DETAIL_MAX_LENGTH}
                     onKeyPress={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -260,30 +336,42 @@ export const InfiniteContentModal = ({
                   <Button
                     type="button"
                     onClick={handleAddDetail}
-                    disabled={!detailInput.trim() || saving}
+                    disabled={
+                      !detailInput.trim() || 
+                      saving || 
+                      (formData.details || []).length >= INFINITE_CONTENT_CONSTANTS.MAX_DETAILS
+                    }
                     size="sm"
                   >
                     Añadir
                   </Button>
                 </div>
 
-                {formData.details.length > 0 && (
+                {(formData.details || []).length > 0 && (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-gray-700">
-                      Detalles añadidos ({formData.details.length}):
+                      Detalles añadidos:
                     </p>
-                    <ul className="space-y-1">
-                      {formData.details.map((detail, index) => (
+                    <ul className="space-y-1 max-h-40 overflow-y-auto">
+                      {(formData.details || []).map((detail, index) => (
                         <li 
                           key={index}
-                          className="flex items-center justify-between bg-gray-50 rounded px-3 py-2"
+                          className="flex items-center justify-between bg-gray-50 rounded px-3 py-2 group"
                         >
-                          <span className="text-sm text-gray-700">{detail}</span>
+                          <input
+                            type="text"
+                            value={detail}
+                            onChange={(e) => handleEditDetail(index, e.target.value)}
+                            className="flex-1 bg-transparent text-sm text-gray-700 border-none outline-none focus:bg-white focus:px-2 focus:py-1 focus:rounded"
+                            maxLength={INFINITE_CONTENT_CONSTANTS.DETAIL_MAX_LENGTH}
+                            disabled={saving}
+                          />
                           <button
                             type="button"
                             onClick={() => handleRemoveDetail(index)}
-                            className="text-red-500 hover:text-red-700 ml-2"
+                            className="text-red-500 hover:text-red-700 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
                             disabled={saving}
+                            title="Eliminar detalle"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -299,19 +387,29 @@ export const InfiniteContentModal = ({
           </div>
         </div>
 
+        {/* Indicador de cambios no guardados */}
+        {hasUnsavedChanges() && (
+          <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.96-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            Tienes cambios sin guardar
+          </div>
+        )}
+
         {/* Botones de acción */}
         <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
           <Button
             type="button"
             variant="secondary"
-            onClick={handleClose}
+            onClick={handleCloseWithConfirmation}
             disabled={saving}
           >
             Cancelar
           </Button>
           <Button
             type="submit"
-            disabled={saving || loading}
+            disabled={saving || loading || Object.keys(errors).some(key => key !== 'submit' && errors[key as keyof typeof errors])}
           >
             {saving ? 'Guardando...' : item ? 'Actualizar' : 'Crear'}
           </Button>

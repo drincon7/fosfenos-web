@@ -178,15 +178,17 @@ model BlogPost {
 }
 
 
+// Agregar este modelo a tu archivo prisma/schema.prisma
+
 model InfiniteContent {
   id               String   @id @default(cuid())
   title            String
   shortDescription String
   description      String   
   image            String
-  details          String   
-  order            Int      @default(0)
+  details          Json     // Cambiado de String[] a Json para compatibilidad
   active           Boolean  @default(true)
+  order            Int      @default(1)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
